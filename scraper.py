@@ -30,59 +30,24 @@ def scrape_investing_volume():
             page.goto("https://pl.investing.com/commodities/crude-oil", timeout=60000, wait_until="networkidle")
             
             # Czekaj na załadowanie elementów
-            page.wait_for_timeout(3000)
+            page.wait_for_timeout(2000)
             
-            # Spróbuj różne selektor CSS dla wolumenu
-            volume = None
-            
-            # Selektor 1: Szukaj "Wolumen" w tekście
+            # Szukaj data-test="volume"
             try:
-                elements = page.query_selector_all("text=/Wolumen|Volume/i")
-                if elements:
-                    parent = elements[0].evaluate("el => el.closest('[data-test], .row, .pair-item')")
-                    if parent:
-                        volume = parent.inner_text()
-            except:
-                pass
-            
-            # Selektor 2: XPath - bezpośrednie szukanie
-            if not volume:
-                try:
-                    volume = page.locator("//span[contains(text(), 'Wolumen')]/../following-sibling::*//span").first.text_content()
-                except:
-                    pass
-            
-            # Selektor 3: Ogólne szukanie w datach
-            if not volume:
-                try:
-                    all_text = page.content()
-                    import re
-                    match = re.search(r'Wolumen["\']?[^\d]*([0-9]+[\.,][0-9]+[KMB]*)', all_text)
-                    if match:
-                        volume = match.group(1)
-                except:
-                    pass
-            
-            # Selektor 4: Szukaj w najnowszych danych
-            if not volume:
-                try:
-                    volume = page.locator("[class*='volume'], [class*='Volume']").first.text_content()
-                except:
-                    pass
+                volume_element = page.locator('[data-test="volume"]')
+                volume_text = volume_element.text_content()
+                
+                # Wyciągnij liczbę z teksty
+                import re
+                match = re.search(r'[\d]+[\.,][\d]+', volume_text)
+                if match:
+                    volume = match.group(0).replace(",", ".")
+                    browser.close()
+                    return volume
+            except Exception as e:
+                print(f"  ⚠️  Selektor volume nie znaleziony: {e}")
             
             browser.close()
-            
-            if volume:
-                # Oczyść wartość
-                volume = volume.replace(",", ".").strip()
-                # Wyciągnij tylko liczbę
-                import re
-                match = re.search(r'[\d]+[.,][\d]+[KMB]?', volume)
-                if match:
-                    return match.group(0).replace(",", ".")
-                return volume
-            
-            print("⚠️  Nie znaleziono wolumenu na stronie")
             return None
             
     except Exception as e:
