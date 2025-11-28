@@ -133,28 +133,26 @@ def scrape_investing_data():
 def is_oil_trading_session():
     """
     Sprawdza czy jesteśmy w sesji handlowej ropy.
-    Sesja UTC-5: poniedziałek-piątek 9:00-14:30
-    Konwersja do UTC: od poniedziałku 14:00 do soboty 19:30 (UTC)
+    Sesja: poniedziałek-piątek 9:00-14:30 UTC-5 (EST)
+    
+    Konwersja: UTC-5 to UTC+7 to +12h razem
+    9:00 UTC-5 = 21:00 UTC-5 poprzedniego dnia
+    Ale łatwiej: po prostu codziennie od 14:00 UTC do 19:30 UTC
+    (bo 9:00 UTC-5 = 14:00 UTC, 14:30 UTC-5 = 19:30 UTC)
     """
     # Pobieramy aktualny czas w UTC
     now_utc = datetime.now(timezone.utc)
     
-    # Dzień tygodnia (0=poniedziałek, 6=niedziela)
-    weekday_utc = now_utc.weekday()
+    weekday_utc = now_utc.weekday()  # 0=pon, 4=pią, 5=sob
     hour_utc = now_utc.hour
     minute_utc = now_utc.minute
     
-    # Sesja w UTC-5: pon-pią 9:00-14:30 = pon 14:00 UTC do sob 19:30 UTC
-    is_session = False
+    # Sesja: pon-pią (0-4) od 14:00 do 19:30 UTC
+    is_weekday = 0 <= weekday_utc <= 4
+    is_trading_time = (hour_utc >= 14 and hour_utc < 19) or \
+                      (hour_utc == 19 and minute_utc <= 30)
     
-    if weekday_utc == 0:  # Poniedziałek
-        is_session = (hour_utc > 14) or (hour_utc == 14 and minute_utc >= 0)
-    elif 1 <= weekday_utc <= 4:  # Wtorek-piątek
-        is_session = True
-    elif weekday_utc == 5:  # Sobota
-        is_session = (hour_utc < 19) or (hour_utc == 19 and minute_utc <= 30)
-    
-    return is_session
+    return is_weekday and is_trading_time
 
 def job():
     scrape_investing_data()
