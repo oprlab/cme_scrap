@@ -4,10 +4,8 @@ from datetime import datetime, timezone, timedelta
 import csv
 import os
 import requests
-import asyncio
-from pyppeteer import launch
-import subprocess
-import sys
+from bs4 import BeautifulSoup
+import re
 
 DATA_FILE = "investing_oil.csv"
 
@@ -18,72 +16,6 @@ SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 # Walidacja Supabase
 if not SUPABASE_URL or not SUPABASE_KEY:
     print("⚠️  SUPABASE_URL lub SUPABASE_KEY nie jest ustawiony!")
-
-# Zainstaluj Playwright browserów jeśli brakuje
-def ensure_playwright_browsers():
-    """Upewnia się że Pyppeteer ma zainstalowany Chromium"""
-    print("✅ Pyppeteer automatycznie pobierze Chromium przy pierwszym użyciu")
-
-def scrape_investing_volume():
-    """Scrapeuje wolumen ropy z Investing.com"""
-    async def _scrape():
-        browser = None
-        try:
-            browser = await launch(
-                headless=True,
-                args=['--no-sandbox', '--disable-setuid-sandbox'],
-                timeout=30000
-            )
-            page = await browser.newPage()
-            
-            # Ustaw user agent
-            await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-            
-            # Nawiguj do strony
-            await page.goto(
-                "https://pl.investing.com/commodities/crude-oil", 
-                waitUntil='networkidle2', 
-                timeout=60000
-            )
-            
-            # Czekaj na załadowanie
-            await page.waitFor(2000)
-            
-            # Szukaj data-test="volume"
-            volume_text = await page.evaluate('''() => {
-                const el = document.querySelector('[data-test="volume"]');
-                return el ? el.innerText : null;
-            }''')
-            
-            if volume_text:
-                import re
-                match = re.search(r'[\d]+[\.,][\d]+', volume_text)
-                if match:
-                    volume = match.group(0).replace(",", ".")
-                    return volume
-            
-            return None
-            
-        except Exception as e:
-            print(f"  ⚠️  Błąd przy scrapeowaniu: {e}")
-            return None
-        finally:
-            if browser:
-                try:
-                    await browser.close()
-                except:
-                    pass
-    
-    # Uruchom async funkcję
-    try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        result = loop.run_until_complete(_scrape())
-        loop.close()
-        return result
-    except Exception as e:
-        print(f"⚠️  Błąd pętli: {e}")
-        return None
 
 def save_to_csv(data):
     file_exists = os.path.isfile(DATA_FILE)
@@ -122,9 +54,52 @@ def send_to_webhook(data):
     except Exception as e:
         print(f"❌ Błąd Supabase: {e}")
 
+def scrape_investing_volume():
+    """Scrapeuje wolumen ropy z Investing.com używając BeautifulSoup"""
+    try:
+        print("  🌐 Pobieranie strony...")
+        
+        # Headers aby nie zostać zablokowanym
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+        
+        # Pobierz stronę
+        response = requests.get(
+            "https://pl.investing.com/commodities/crude-oil",
+            headers=headers,
+            timeout=15
+        )
+        response.raise_for_status()
+        
+        # Parse HTML
+        soup = BeautifulSoup(response.content, 'lxml')
+        
+        # Szukaj elementu data-test="volume"
+        volume_element = soup.find('dd', {'data-test': 'volume'})
+        
+        if volume_element:
+            # Wyciągnij tekst
+            volume_text = volume_element.get_text()
+            print(f"  📝 Znaleziony tekst: {volume_text}")
+            
+            # Wyciągnij liczbę
+            match = re.search(r'[\d]+[\.,][\d]+', volume_text)
+            if match:
+                volume = match.group(0).replace(",", ".")
+                print(f"  ✅ Wyodrębniony wolumen: {volume}")
+                return volume
+        
+        print("  ⚠️  Element data-test='volume' nie znaleziony")
+        return None
+            
+    except Exception as e:
+        print(f"⚠️  Błąd przy scrapeowaniu: {e}")
+        return None
+
 def scrape_investing_data():
     """
-    Scrapuje wolumen ropy z Investing.com przy użyciu Pyppeteer.
+    Scrapuje wolumen ropy z Investing.com przy użyciu BeautifulSoup.
     Zbiera TYLKO dane ze strony - bez mock danych!
     """
     # Sprawdzenie czy jesteśmy w sesji handlowej ropy
@@ -190,12 +165,8 @@ if __name__ == "__main__":
     print("   Źródło: https://pl.investing.com/commodities/crude-oil")
     print("   Zbieranie: co 3 minuty (TEST MODE)")
     print("   Sesja: poniedziałek-piątek, UTC: 14:00-19:30")
-    print("   Tryb: LIVE (zbieranie TYLKO ze strony)")
+    print("   Tryb: LIVE (zbieranie TYLKO ze strony - BeautifulSoup)")
     print(f"   SUPABASE: {'✅ Configured' if SUPABASE_URL and SUPABASE_KEY else '❌ Not configured'}")
-    print("="*50)
-    
-    # Zainstaluj Pyppeteer przy starcie
-    ensure_playwright_browsers()
     print("="*50)
     
     # Uruchom zbieranie OD RAZU
