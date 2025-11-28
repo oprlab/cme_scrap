@@ -5,12 +5,12 @@ import csv
 import os
 import requests
 
-DATA_FILE = "cme_data.csv"
+DATA_FILE = "investing_oil.csv"
 
 # ⚠️ DANE MOCK - Do pobrania raz lokalnie i wklejenia tutaj
-# Pobierz z: https://www.cmegroup.com/markets/energy/crude-oil/light-sweet-crude.settlements.html
+# Pobierz z: https://pl.investing.com/commodities/crude-oil
 # i zmień wartości poniżej
-MOCK_EST_VOLUME = "228,285"  # ← Zmień tę wartość na bieżące dane
+MOCK_VOLUME = "77.626"  # ← Zmień tę wartość na bieżące dane (Wolumen)
 
 # WEBHOOK - Zmień na URL twojego webhoka do bazy danych
 WEBHOOK_URL = "https://twoja-domena.com/webhook"  # ← Zmień na rzeczywisty URL
@@ -28,7 +28,7 @@ def save_to_csv(data):
     file_exists = os.path.isfile(DATA_FILE)
     try:
         with open(DATA_FILE, 'a', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=["timestamp", "est_volume"])
+            writer = csv.DictWriter(f, fieldnames=["timestamp", "volume"])
             if not file_exists:
                 writer.writeheader()
             writer.writerow(data)
@@ -50,7 +50,7 @@ def send_to_webhook(data):
             "est_volume": data["est_volume"]
         }
         
-        url = f"{SUPABASE_URL}/rest/v1/cme_data"
+        url = f"{SUPABASE_URL}/rest/v1/investing_oil"
         response = requests.post(url, json=payload, headers=headers, timeout=10)
         
         if response.status_code in [200, 201]:
@@ -61,26 +61,26 @@ def send_to_webhook(data):
     except Exception as e:
         print(f"❌ Błąd Supabase: {e}")
 
-def scrape_cme_data():
+def scrape_investing_data():
     """
-    UWAGA: Ta wersja używa mock danych, ponieważ CME ładuje dane dynamicznie
-    i Replit nie obsługuje przeglądarek (Playwright, Selenium itp).
+    UWAGA: Ta wersja używa mock danych, ponieważ Investing.com ładuje dane dynamicznie
+    i Railway nie obsługuje przeglądarek (Playwright, Selenium itp).
     
     Aby zaktualizować dane:
-    1. Otwórz https://www.cmegroup.com/markets/energy/crude-oil/light-sweet-crude.settlements.html w przeglądarce
-    2. Znajdź kolumnę "EST. VOLUME" w tabeli (pierwszy wiersz JAN 26)
-    3. Skopiuj wartość (np. 228,285)
-    4. Zmień MOCK_EST_VOLUME na tę wartość
+    1. Otwórz https://pl.investing.com/commodities/crude-oil w przeglądarce
+    2. Znajdź pole "Wolumen"
+    3. Skopiuj wartość (np. 77.626)
+    4. Zmień MOCK_VOLUME na tę wartość
     5. Uruchom scraper ponownie
     """
     try:
-        print(f"🔄 Scrapowanie ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})...")
-        print(f"  📊 EST. VOLUME: {MOCK_EST_VOLUME} (dane mock)")
+        print(f"🔄 Scrapowanie Investing.com ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})...")
+        print(f"  📊 Wolumen: {MOCK_VOLUME} (dane mock)")
         print("-" * 50)
         
         data = {
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "est_volume": MOCK_EST_VOLUME
+            "volume": MOCK_VOLUME
         }
         
         save_to_csv(data)
@@ -91,11 +91,12 @@ def scrape_cme_data():
         print("-" * 50)
 
 def job():
-    scrape_cme_data()
+    scrape_investing_data()
 
 if __name__ == "__main__":
-    print("🚀 SCRAPER CME GROUP URUCHOMIONY!")
+    print("🚀 SCRAPER INVESTING.COM URUCHOMIONY!")
     print(f"   Start: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("   Źródło: https://pl.investing.com/commodities/crude-oil")
     print("   Zbieranie: o równych godzinach (:00 i :30)")
     print("   Tryb: MOCK (dane ręcznie aktualizowane)")
     print("="*50)
