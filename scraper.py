@@ -27,10 +27,12 @@ def ensure_playwright_browsers():
 def scrape_investing_volume():
     """Scrapeuje wolumen ropy z Investing.com"""
     async def _scrape():
+        browser = None
         try:
             browser = await launch(
                 headless=True,
-                args=['--no-sandbox', '--disable-setuid-sandbox']
+                args=['--no-sandbox', '--disable-setuid-sandbox'],
+                timeout=30000
             )
             page = await browser.newPage()
             
@@ -38,44 +40,50 @@ def scrape_investing_volume():
             await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
             
             # Nawiguj do strony
-            await page.goto("https://pl.investing.com/commodities/crude-oil", 
-                          waitUntil='networkidle2', timeout=60000)
+            await page.goto(
+                "https://pl.investing.com/commodities/crude-oil", 
+                waitUntil='networkidle2', 
+                timeout=60000
+            )
             
             # Czekaj na załadowanie
             await page.waitFor(2000)
             
             # Szukaj data-test="volume"
-            try:
-                volume_text = await page.evaluate('''() => {
-                    const el = document.querySelector('[data-test="volume"]');
-                    return el ? el.innerText : null;
-                }''')
-                
-                if volume_text:
-                    import re
-                    match = re.search(r'[\d]+[\.,][\d]+', volume_text)
-                    if match:
-                        volume = match.group(0).replace(",", ".")
-                        await browser.close()
-                        return volume
-            except Exception as e:
-                print(f"  ⚠️  Błąd przy szukaniu selektora: {e}")
+            volume_text = await page.evaluate('''() => {
+                const el = document.querySelector('[data-test="volume"]');
+                return el ? el.innerText : null;
+            }''')
             
-            await browser.close()
+            if volume_text:
+                import re
+                match = re.search(r'[\d]+[\.,][\d]+', volume_text)
+                if match:
+                    volume = match.group(0).replace(",", ".")
+                    return volume
+            
             return None
             
         except Exception as e:
-            print(f"⚠️  Błąd przy scrapeowaniu: {e}")
+            print(f"  ⚠️  Błąd przy scrapeowaniu: {e}")
             return None
+        finally:
+            if browser:
+                try:
+                    await browser.close()
+                except:
+                    pass
     
     # Uruchom async funkcję
     try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-    
-    return loop.run_until_complete(_scrape())
+        result = loop.run_until_complete(_scrape())
+        loop.close()
+        return result
+    except Exception as e:
+        print(f"⚠️  Błąd pętli: {e}")
+        return None
 
 def save_to_csv(data):
     file_exists = os.path.isfile(DATA_FILE)
