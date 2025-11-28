@@ -21,34 +21,68 @@ def scrape_investing_volume():
     """Scrapeuje wolumen ropy z Investing.com"""
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
+            browser = p.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled"])
             page = browser.new_page()
-            page.goto("https://pl.investing.com/commodities/crude-oil", timeout=30000)
+            page.set_extra_http_headers({
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            })
             
-            # Czekaj na załadowanie strony
-            page.wait_for_load_state("networkidle")
+            page.goto("https://pl.investing.com/commodities/crude-oil", timeout=60000, wait_until="networkidle")
             
-            # Szukaj wolumenu (może być w różnych miejscach)
-            # Szukamy liczby po słowie "Wolumen"
-            volume_text = page.text_content()
+            # Czekaj na załadowanie elementów
+            page.wait_for_timeout(3000)
             
-            # Spróbuj różne selektor CSS
+            # Spróbuj różne selektor CSS dla wolumenu
+            volume = None
+            
+            # Selektor 1: Szukaj "Wolumen" w tekście
             try:
-                volume = page.locator("text=Wolumen").first.locator("..").text_content()
-                volume = volume.split("\n")[-1].strip()
+                elements = page.query_selector_all("text=/Wolumen|Volume/i")
+                if elements:
+                    parent = elements[0].evaluate("el => el.closest('[data-test], .row, .pair-item')")
+                    if parent:
+                        volume = parent.inner_text()
             except:
+                pass
+            
+            # Selektor 2: XPath - bezpośrednie szukanie
+            if not volume:
                 try:
-                    # Alternatywny selektor
-                    volume = page.locator("[data-test='text-volume']").text_content()
+                    volume = page.locator("//span[contains(text(), 'Wolumen')]/../following-sibling::*//span").first.text_content()
                 except:
-                    volume = None
+                    pass
+            
+            # Selektor 3: Ogólne szukanie w datach
+            if not volume:
+                try:
+                    all_text = page.content()
+                    import re
+                    match = re.search(r'Wolumen["\']?[^\d]*([0-9]+[\.,][0-9]+[KMB]*)', all_text)
+                    if match:
+                        volume = match.group(1)
+                except:
+                    pass
+            
+            # Selektor 4: Szukaj w najnowszych danych
+            if not volume:
+                try:
+                    volume = page.locator("[class*='volume'], [class*='Volume']").first.text_content()
+                except:
+                    pass
             
             browser.close()
             
             if volume:
-                # Oczyść wartość (usuń znaki niewłaściwe)
+                # Oczyść wartość
                 volume = volume.replace(",", ".").strip()
+                # Wyciągnij tylko liczbę
+                import re
+                match = re.search(r'[\d]+[.,][\d]+[KMB]?', volume)
+                if match:
+                    return match.group(0).replace(",", ".")
                 return volume
+            
+            print("⚠️  Nie znaleziono wolumenu na stronie")
             return None
             
     except Exception as e:
