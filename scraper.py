@@ -130,6 +130,9 @@ if __name__ == "__main__":
     print("   Zbieranie: o równych połówkach godziny (:00 i :30)")
     print("   Sesja: poniedziałek-piątek, UTC-5: 9:00-14:30")
     print("   Tryb: MOCK (dane z MOCK_VOLUME variable)")
+    print(f"   MOCK_VOLUME: {MOCK_VOLUME}")
+    print(f"   SUPABASE_URL: {'✅ Set' if SUPABASE_URL else '❌ Not set'}")
+    print(f"   SUPABASE_KEY: {'✅ Set' if SUPABASE_KEY else '❌ Not set'}")
     print("="*50)
     
     # Nie uruchamiamy job() od razu - czekamy na schedule
