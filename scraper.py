@@ -47,7 +47,7 @@ def send_to_webhook(data):
         
         payload = {
             "timestamp": data["timestamp"],
-            "est_volume": data["est_volume"]
+            "volume": data["volume"]
         }
         
         url = f"{SUPABASE_URL}/rest/v1/investing_oil"
