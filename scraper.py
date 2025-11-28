@@ -40,7 +40,7 @@ def send_to_webhook(data):
     """Wysyła dane do Supabase"""
     try:
         headers = {
-            "Authorization": f"Bearer {SUPABASE_KEY}",
+            "apikey": SUPABASE_KEY,
             "Content-Type": "application/json",
             "Prefer": "return=minimal"
         }
