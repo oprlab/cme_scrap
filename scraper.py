@@ -3,148 +3,119 @@ import time
 from datetime import datetime
 import csv
 import os
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.chrome.options import Options
+import asyncio
+from pyppeteer import launch
 
-# Plik do zapisywania danych
 DATA_FILE = "cme_data.csv"
 
 def save_to_csv(data):
     """Zapisuje dane do pliku CSV"""
     file_exists = os.path.isfile(DATA_FILE)
-    
     try:
         with open(DATA_FILE, 'a', newline='', encoding='utf-8') as f:
             writer = csv.DictWriter(f, fieldnames=["timestamp", "est_volume"])
             if not file_exists:
                 writer.writeheader()
             writer.writerow(data)
-            print(f"✅ Dane zapisane do {DATA_FILE}")
+        print(f"✅ Dane zapisane do {DATA_FILE}")
     except Exception as e:
         print(f"❌ Błąd przy zapisywaniu: {e}")
 
-def scrape_cme_data():
+async def scrape_cme_data():
     """Zbiera dane z CME Group - EST. VOLUME z tabeli"""
-    driver = None
+    browser = None
     try:
-        print(f"🔄 Scrapowanie CME Group ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})...")
+        print(f"🔄 Scrapowanie ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})...")
         
-        # Konfiguracja opcji Chrome
-        chrome_options = Options()
-        chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--disable-gpu")
-        chrome_options.add_argument("--window-size=1920,1080")
+        # Uruchom przeglądarke
+        browser = await launch(
+            headless=True,
+            args=['--no-sandbox', '--disable-setuid-sandbox']
+        )
+        page = await browser.newPage()
         
-        # Uruchom driver
-        driver = webdriver.Chrome(options=chrome_options)
+        # Nawiguj do strony z timeoutem
+        await page.goto(
+            "https://www.cmegroup.com/markets/energy/crude-oil/light-sweet-crude.settlements.html",
+            waitUntil='networkidle2',
+            timeout=30000
+        )
         
-        # Nawiguj do strony
-        driver.get("https://www.cmegroup.com/markets/energy/crude-oil/light-sweet-crude.settlements.html")
+        # Czekaj na tabelę
+        await page.waitForSelector('table', timeout=15000)
+        await page.waitFor(2000)  # Czekaj aby dane się wyrenderowały
         
-        # Czekaj aż tabela się załaduje
-        wait = WebDriverWait(driver, 15)
-        table = wait.until(EC.presence_of_element_located((By.TAG_NAME, "table")))
-        
-        # Czekaj na tym aby dane się wyrenderowały
-        time.sleep(2)
-        
-        # Znajdź wszystkie nagłówki
-        headers = driver.find_elements(By.CSS_SELECTOR, "table th")
-        headers_text = [h.text.strip() for h in headers]
-        
-        print(f"📋 Nagłówki: {headers_text}")
-        
-        # Szukaj indeksu "EST. VOLUME"
-        est_volume_index = None
-        for i, header in enumerate(headers_text):
-            if 'EST. VOLUME' in header.upper():
-                est_volume_index = i
-                break
-        
-        if est_volume_index is not None:
-            # Znajdź pierwszy wiersz (JAN 26)
-            rows = driver.find_elements(By.CSS_SELECTOR, "table tbody tr")
-            
-            if rows:
-                first_row = rows[0]
-                cells = first_row.find_elements(By.TAG_NAME, "td")
+        # Wyciągnij dane za pomocą JavaScript
+        data_js = await page.evaluate("""
+            () => {
+                let table = document.querySelector('table');
+                if (!table) return null;
                 
-                if est_volume_index < len(cells):
-                    est_volume = cells[est_volume_index].text.strip()
-                    
-                    # Przygotuj dane
-                    data = {
-                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        "est_volume": est_volume
+                // Znajdź nagłówki
+                let headers = [];
+                let headerElements = table.querySelectorAll('th');
+                headerElements.forEach(h => {
+                    headers.push(h.textContent.trim());
+                });
+                
+                // Znajdź indeks EST. VOLUME
+                let estVolumeIndex = headers.findIndex(h => h.toUpperCase().includes('EST. VOLUME'));
+                
+                if (estVolumeIndex === -1) return null;
+                
+                // Znajdź pierwszy wiersz w tbody
+                let rows = table.querySelectorAll('tbody tr');
+                if (rows.length === 0) {
+                    rows = table.querySelectorAll('tr');
+                }
+                
+                if (rows.length > 0) {
+                    let cells = rows[0].querySelectorAll('td');
+                    if (estVolumeIndex < cells.length) {
+                        return {
+                            headers: headers,
+                            estVolume: cells[estVolumeIndex].textContent.trim()
+                        };
                     }
-                    
-                    print(f"📊 EST. VOLUME: {data['est_volume']}")
-                    print("-" * 50)
-                    
-                    # Zapisz do pliku
-                    save_to_csv(data)
-                else:
-                    print(f"❌ Indeks kolumny poza zakresem: {est_volume_index} >= {len(cells)}")
-                    print("-" * 50)
-            else:
-                print("❌ Nie znaleziono wierszy w tabeli")
-                print("-" * 50)
+                }
+                return null;
+            }
+        """)
+        
+        if data_js and data_js['estVolume']:
+            print(f"📋 Nagłówki: {data_js['headers']}")
+            print(f"📊 EST. VOLUME: {data_js['estVolume']}")
+            print("-" * 50)
+            
+            data = {
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "est_volume": data_js['estVolume']
+            }
+            save_to_csv(data)
         else:
-            print("❌ Nie znaleziono kolumny EST. VOLUME")
+            print("❌ Nie znaleziono danych w tabeli")
             print("-" * 50)
         
     except Exception as e:
-        print(f"❌ Błąd podczas scrapowania: {e}")
-        print(f"   Szczegóły: {str(e)}")
+        print(f"❌ Błąd: {e}")
         print("-" * 50)
     finally:
-        if driver:
-            driver.quit()
+        if browser:
+            await browser.close()
 
 def job():
     """Funkcja uruchamiana przez scheduler"""
-    scrape_cme_data()
+    asyncio.run(scrape_cme_data())
 
 if __name__ == "__main__":
     print("🚀 SCRAPER CME GROUP URUCHOMIONY!")
     print(f"   Start: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("   Strona: https://www.cmegroup.com/markets/energy/crude-oil/light-sweet-crude.settlements.html")
-    print("   Dane: EST. VOLUME z tabeli")
     print("   Zbieranie: co 30 minut")
-    print("   Plik z danymi: cme_data.csv")
     print("="*50)
     
-    # Uruchom pierwszą scrapowanie od razu
     job()
-    
-    # Ustaw scheduler - uruchamiaj co 30 minut
     schedule.every(30).minutes.do(job)
     
-    # Główna pętla
     while True:
         schedule.run_pending()
-        time.sleep(60)  # Sprawdzaj co minutę
-
-if __name__ == "__main__":
-    print("🚀 SCRAPER CME GROUP URUCHOMIONY!")
-    print(f"   Start: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("   Strona: https://www.cmegroup.com/markets/energy/crude-oil/light-sweet-crude.settlements.html")
-    print("   Dane będą zbierane co 30 minut")
-    print("   Plik z danymi: cme_data.csv")
-    print("="*50)
-    
-    # Uruchom pierwszą scrapowanie od razu
-    job()
-    
-    # Ustaw scheduler - uruchamiaj co 30 minut
-    schedule.every(30).minutes.do(job)
-    
-    # Główna pętla
-    while True:
-        schedule.run_pending()
-        time.sleep(60)  # Sprawdzaj co minutę
+        time.sleep(60)
