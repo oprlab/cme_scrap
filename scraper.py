@@ -161,15 +161,14 @@ if __name__ == "__main__":
     print("🚀 SCRAPER INVESTING.COM URUCHOMIONY!")
     print(f"   Start: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("   Źródło: https://pl.investing.com/commodities/crude-oil")
-    print("   Zbieranie: o równych połówkach godziny (:00 i :30)")
+    print("   Zbieranie: co 3 minuty (TEST MODE)")
     print("   Sesja: poniedziałek-piątek, UTC-5: 9:00-14:30")
     print("   Tryb: LIVE (automatyczne scrapowanie + fallback MOCK)")
-    print(f"   SUPABASE: {'✅ Configured' if SUPABASE_URL and SUPABASE_KEY else '❌ Not set'}")
+    print(f"   SUPABASE: {'✅ Configured' if SUPABASE_URL and SUPABASE_KEY else '❌ Not configured'}")
     print("="*50)
     
-    # Nie uruchamiamy job() od razu - czekamy na schedule
-    schedule.every().hour.at(":00").do(job)  # Co godzinę o :00
-    schedule.every().hour.at(":30").do(job)  # Co godzinę o :30
+    # TEST: Co 3 minuty zamiast :00 i :30
+    schedule.every(3).minutes.do(job)
     
     while True:
         schedule.run_pending()
