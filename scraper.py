@@ -96,12 +96,13 @@ def job():
 if __name__ == "__main__":
     print("🚀 SCRAPER CME GROUP URUCHOMIONY!")
     print(f"   Start: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("   Zbieranie: co 30 minut")
+    print("   Zbieranie: o równych godzinach (:00 i :30)")
     print("   Tryb: MOCK (dane ręcznie aktualizowane)")
     print("="*50)
     
     job()
-    schedule.every(30).minutes.do(job)
+    schedule.every().hour.at(":00").do(job)  # Co godzinę o :00
+    schedule.every().hour.at(":30").do(job)  # Co godzinę o :30
     
     while True:
         schedule.run_pending()
