@@ -5,6 +5,8 @@ import csv
 import os
 import requests
 from playwright.sync_api import sync_playwright
+import subprocess
+import sys
 
 DATA_FILE = "investing_oil.csv"
 
@@ -16,6 +18,17 @@ SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 # Walidacja Supabase
 if not SUPABASE_URL or not SUPABASE_KEY:
     print("⚠️  SUPABASE_URL lub SUPABASE_KEY nie jest ustawiony!")
+
+# Zainstaluj Playwright browserów jeśli brakuje
+def ensure_playwright_browsers():
+    """Upewnia się że Playwright ma zainstalowane przeglądarki"""
+    try:
+        print("🔍 Sprawdzam instalację Playwright...")
+        subprocess.run([sys.executable, "-m", "playwright", "install"], 
+                      check=True, capture_output=True, timeout=300)
+        print("✅ Playwright browserów zainstalowane")
+    except Exception as e:
+        print(f"⚠️  Błąd przy instalacji Playwright: {e}")
 
 def scrape_investing_volume():
     """Scrapeuje wolumen ropy z Investing.com"""
@@ -165,6 +178,10 @@ if __name__ == "__main__":
     print("   Sesja: poniedziałek-piątek, UTC-5: 9:00-14:30")
     print("   Tryb: LIVE (automatyczne scrapowanie + fallback MOCK)")
     print(f"   SUPABASE: {'✅ Configured' if SUPABASE_URL and SUPABASE_KEY else '❌ Not configured'}")
+    print("="*50)
+    
+    # Zainstaluj Playwright przy starcie
+    ensure_playwright_browsers()
     print("="*50)
     
     # TEST: Co 3 minuty zamiast :00 i :30
