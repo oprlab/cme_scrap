@@ -4,7 +4,8 @@ from datetime import datetime, timezone, timedelta
 import csv
 import os
 import requests
-from playwright.sync_api import sync_playwright
+import asyncio
+from pyppeteer import launch
 import subprocess
 import sys
 
@@ -21,51 +22,61 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 
 # Zainstaluj Playwright browserów jeśli brakuje
 def ensure_playwright_browsers():
-    """Upewnia się że Playwright ma zainstalowane przeglądarki"""
-    try:
-        print("🔍 Sprawdzam instalację Playwright...")
-        subprocess.run([sys.executable, "-m", "playwright", "install"], 
-                      check=True, capture_output=True, timeout=300)
-        print("✅ Playwright browserów zainstalowane")
-    except Exception as e:
-        print(f"⚠️  Błąd przy instalacji Playwright: {e}")
+    """Upewnia się że Pyppeteer ma zainstalowany Chromium"""
+    print("✅ Pyppeteer automatycznie pobierze Chromium przy pierwszym użyciu")
 
 def scrape_investing_volume():
     """Scrapeuje wolumen ropy z Investing.com"""
-    try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled"])
-            page = browser.new_page()
-            page.set_extra_http_headers({
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-            })
+    async def _scrape():
+        try:
+            browser = await launch(
+                headless=True,
+                args=['--no-sandbox', '--disable-setuid-sandbox']
+            )
+            page = await browser.newPage()
             
-            page.goto("https://pl.investing.com/commodities/crude-oil", timeout=60000, wait_until="networkidle")
+            # Ustaw user agent
+            await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
             
-            # Czekaj na załadowanie elementów
-            page.wait_for_timeout(2000)
+            # Nawiguj do strony
+            await page.goto("https://pl.investing.com/commodities/crude-oil", 
+                          waitUntil='networkidle2', timeout=60000)
+            
+            # Czekaj na załadowanie
+            await page.waitFor(2000)
             
             # Szukaj data-test="volume"
             try:
-                volume_element = page.locator('[data-test="volume"]')
-                volume_text = volume_element.text_content()
+                volume_text = await page.evaluate('''() => {
+                    const el = document.querySelector('[data-test="volume"]');
+                    return el ? el.innerText : null;
+                }''')
                 
-                # Wyciągnij liczbę z teksty
-                import re
-                match = re.search(r'[\d]+[\.,][\d]+', volume_text)
-                if match:
-                    volume = match.group(0).replace(",", ".")
-                    browser.close()
-                    return volume
+                if volume_text:
+                    import re
+                    match = re.search(r'[\d]+[\.,][\d]+', volume_text)
+                    if match:
+                        volume = match.group(0).replace(",", ".")
+                        await browser.close()
+                        return volume
             except Exception as e:
-                print(f"  ⚠️  Selektor volume nie znaleziony: {e}")
+                print(f"  ⚠️  Błąd przy szukaniu selektora: {e}")
             
-            browser.close()
+            await browser.close()
             return None
             
-    except Exception as e:
-        print(f"⚠️  Błąd przy scrapeowaniu: {e}")
-        return None
+        except Exception as e:
+            print(f"⚠️  Błąd przy scrapeowaniu: {e}")
+            return None
+    
+    # Uruchom async funkcję
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    return loop.run_until_complete(_scrape())
 
 def save_to_csv(data):
     file_exists = os.path.isfile(DATA_FILE)
