@@ -1,10 +1,13 @@
-import asyncio
 import schedule
 import time
 from datetime import datetime
 import csv
 import os
-from playwright.async_api import async_playwright
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.options import Options
 
 # Plik do zapisywania danych
 DATA_FILE = "cme_data.csv"
@@ -23,96 +26,89 @@ def save_to_csv(data):
     except Exception as e:
         print(f"❌ Błąd przy zapisywaniu: {e}")
 
-async def scrape_cme_data():
+def scrape_cme_data():
     """Zbiera dane z CME Group - EST. VOLUME z tabeli"""
+    driver = None
     try:
         print(f"🔄 Scrapowanie CME Group ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})...")
         
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page()
+        # Konfiguracja opcji Chrome
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--window-size=1920,1080")
+        
+        # Uruchom driver
+        driver = webdriver.Chrome(options=chrome_options)
+        
+        # Nawiguj do strony
+        driver.get("https://www.cmegroup.com/markets/energy/crude-oil/light-sweet-crude.settlements.html")
+        
+        # Czekaj aż tabela się załaduje
+        wait = WebDriverWait(driver, 15)
+        table = wait.until(EC.presence_of_element_located((By.TAG_NAME, "table")))
+        
+        # Czekaj na tym aby dane się wyrenderowały
+        time.sleep(2)
+        
+        # Znajdź wszystkie nagłówki
+        headers = driver.find_elements(By.CSS_SELECTOR, "table th")
+        headers_text = [h.text.strip() for h in headers]
+        
+        print(f"📋 Nagłówki: {headers_text}")
+        
+        # Szukaj indeksu "EST. VOLUME"
+        est_volume_index = None
+        for i, header in enumerate(headers_text):
+            if 'EST. VOLUME' in header.upper():
+                est_volume_index = i
+                break
+        
+        if est_volume_index is not None:
+            # Znajdź pierwszy wiersz (JAN 26)
+            rows = driver.find_elements(By.CSS_SELECTOR, "table tbody tr")
             
-            # Nawiguj do strony
-            await page.goto(
-                "https://www.cmegroup.com/markets/energy/crude-oil/light-sweet-crude.settlements.html",
-                wait_until="networkidle",
-                timeout=30000
-            )
-            
-            # Czekaj aż tabela się załaduje
-            await page.wait_for_selector('table', timeout=10000)
-            
-            # Czekaj chwilę żeby dane się wyrenderowały
-            await page.wait_for_timeout(2000)
-            
-            # Znajdź kolumnę EST. VOLUME i wyciągnij pierwszą wartość
-            # Szukamy w nagłówkach kolumny "EST. VOLUME"
-            est_volume_value = await page.eval_on_selector_all(
-                'table th',
-                'elements => elements.find(el => el.textContent.includes("EST. VOLUME"))'
-            )
-            
-            if est_volume_value:
-                # Alternatywnie: szukaj w całej tabeli
-                rows = await page.query_selector_all('table tbody tr')
+            if rows:
+                first_row = rows[0]
+                cells = first_row.find_elements(By.TAG_NAME, "td")
                 
-                if rows:
-                    # Weź pierwszy wiersz (JAN 26)
-                    first_row = rows[0]
-                    cells = await first_row.query_selector_all('td')
+                if est_volume_index < len(cells):
+                    est_volume = cells[est_volume_index].text.strip()
                     
-                    # Znaj indeks kolumny EST. VOLUME z nagłówków
-                    headers = await page.query_selector_all('table th')
-                    headers_text = []
-                    for header in headers:
-                        text = await header.text_content()
-                        headers_text.append(text.strip())
+                    # Przygotuj dane
+                    data = {
+                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "est_volume": est_volume
+                    }
                     
-                    print(f"📋 Nagłówki: {headers_text}")
+                    print(f"📊 EST. VOLUME: {data['est_volume']}")
+                    print("-" * 50)
                     
-                    # Szukaj indeksu "EST. VOLUME"
-                    est_volume_index = None
-                    for i, header in enumerate(headers_text):
-                        if 'EST. VOLUME' in header.upper():
-                            est_volume_index = i
-                            break
-                    
-                    if est_volume_index is not None and est_volume_index < len(cells):
-                        est_volume_cell = cells[est_volume_index]
-                        est_volume = await est_volume_cell.text_content()
-                        est_volume = est_volume.strip()
-                        
-                        # Przygotuj dane
-                        data = {
-                            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                            "est_volume": est_volume
-                        }
-                        
-                        print(f"📊 EST. VOLUME: {data['est_volume']}")
-                        print("-" * 50)
-                        
-                        # Zapisz do pliku
-                        save_to_csv(data)
-                    else:
-                        print(f"❌ Nie znaleziono kolumny EST. VOLUME (indeks: {est_volume_index}, komórek: {len(cells)})")
-                        print("-" * 50)
+                    # Zapisz do pliku
+                    save_to_csv(data)
                 else:
-                    print("❌ Nie znaleziono wierszy w tabeli")
+                    print(f"❌ Indeks kolumny poza zakresem: {est_volume_index} >= {len(cells)}")
                     print("-" * 50)
             else:
-                print("❌ Nie znaleziono kolumny EST. VOLUME")
+                print("❌ Nie znaleziono wierszy w tabeli")
                 print("-" * 50)
-            
-            await browser.close()
-            
+        else:
+            print("❌ Nie znaleziono kolumny EST. VOLUME")
+            print("-" * 50)
+        
     except Exception as e:
         print(f"❌ Błąd podczas scrapowania: {e}")
         print(f"   Szczegóły: {str(e)}")
         print("-" * 50)
+    finally:
+        if driver:
+            driver.quit()
 
 def job():
     """Funkcja uruchamiana przez scheduler"""
-    asyncio.run(scrape_cme_data())
+    scrape_cme_data()
 
 if __name__ == "__main__":
     print("🚀 SCRAPER CME GROUP URUCHOMIONY!")
