@@ -198,6 +198,11 @@ if __name__ == "__main__":
     ensure_playwright_browsers()
     print("="*50)
     
+    # Uruchom zbieranie OD RAZU
+    print("📥 Zbieranie danych na starcie...")
+    job()
+    print("="*50)
+    
     # TEST: Co 3 minuty zamiast :00 i :30
     schedule.every(3).minutes.do(job)
     
