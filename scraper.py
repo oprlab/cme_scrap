@@ -7,22 +7,10 @@ import requests
 
 DATA_FILE = "investing_oil.csv"
 
-# ⚠️ DANE MOCK - Do pobrania raz lokalnie i wklejenia tutaj
-# Pobierz z: https://pl.investing.com/commodities/crude-oil
-# i zmień wartości poniżej
-MOCK_VOLUME = "77.626"  # ← Zmień tę wartość na bieżące dane (Wolumen)
-
-# WEBHOOK - Zmień na URL twojego webhoka do bazy danych
-WEBHOOK_URL = "https://twoja-domena.com/webhook"  # ← Zmień na rzeczywisty URL
-
-# SUPABASE CONFIG - Zmień na swoje dane
-SUPABASE_URL = "https://xxx.supabase.co"  # ← Zmień na URL projektu
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."  # ← Zmień na anon key
-
-# Jeśli zmienne środowiskowe są ustawione, użyj ich (Railway)
-import os as os_module
-SUPABASE_URL = os_module.environ.get("SUPABASE_URL", SUPABASE_URL)
-SUPABASE_KEY = os_module.environ.get("SUPABASE_KEY", SUPABASE_KEY)
+# Zmienne środowiskowe (Railway, lokalne .env)
+MOCK_VOLUME = os.environ.get("MOCK_VOLUME", "0.0")
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 
 def save_to_csv(data):
     file_exists = os.path.isfile(DATA_FILE)
