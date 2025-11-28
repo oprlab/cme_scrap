@@ -1,15 +1,18 @@
-import asyncio
+import requests
 import schedule
 import time
 from datetime import datetime
 import csv
 import os
-import json
-from crawl4ai import AsyncWebCrawler
 from bs4 import BeautifulSoup
 
 # Plik do zapisywania danych
 DATA_FILE = "cme_data.csv"
+
+# User-Agent do uniknięcia blokowania przez CME
+HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+}
 
 def save_to_csv(data):
     """Zapisuje dane do pliku CSV"""
@@ -25,46 +28,48 @@ def save_to_csv(data):
     except Exception as e:
         print(f"❌ Błąd przy zapisywaniu: {e}")
 
-async def scrape_cme_data():
+def scrape_cme_data():
     """Zbiera dane z CME Group - Prior day open interest totals"""
     try:
         print(f"🔄 Scrapowanie CME Group ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})...")
         
-        async with AsyncWebCrawler() as crawler:
-            result = await crawler.arun(
-                url="https://www.cmegroup.com/markets/energy/crude-oil/light-sweet-crude.settlements.html",
-                verbose=False
-            )
-            
-            # Parsuj HTML i szukaj danych
-            soup = BeautifulSoup(result.html, 'html.parser')
-            
-            # Szukaj div z klasą "totals-info col-sm-6"
-            totals_info_divs = soup.find_all('div', class_='totals-info col-sm-6')
-            
-            prior_day_open_interest = None
-            
-            # Przejdź przez wszystkie divs i szukaj "Prior day open interest totals"
-            for div in totals_info_divs:
-                label = div.find('span', class_='totals-info-label')
-                if label and 'Prior day open interest totals' in label.get_text():
-                    value_span = div.find('span', class_='totals-info-value')
-                    if value_span:
-                        prior_day_open_interest = value_span.get_text().strip()
-                        break
-            
-            # Przygotuj dane
-            data = {
-                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "prior_day_open_interest": prior_day_open_interest if prior_day_open_interest else "N/A"
-            }
-            
-            print(f"📊 Prior Day Open Interest: {data['prior_day_open_interest']}")
-            print("-" * 50)
-            
-            # Zapisz do pliku
-            save_to_csv(data)
-            
+        # Pobierz stronę
+        response = requests.get(
+            "https://www.cmegroup.com/markets/energy/crude-oil/light-sweet-crude.settlements.html",
+            headers=HEADERS,
+            timeout=10
+        )
+        response.raise_for_status()
+        
+        # Parsuj HTML i szukaj danych
+        soup = BeautifulSoup(response.content, 'html.parser')
+        
+        # Szukaj div z klasą "totals-info col-sm-6"
+        totals_info_divs = soup.find_all('div', class_='totals-info col-sm-6')
+        
+        prior_day_open_interest = None
+        
+        # Przejdź przez wszystkie divs i szukaj "Prior day open interest totals"
+        for div in totals_info_divs:
+            label = div.find('span', class_='totals-info-label')
+            if label and 'Prior day open interest totals' in label.get_text():
+                value_span = div.find('span', class_='totals-info-value')
+                if value_span:
+                    prior_day_open_interest = value_span.get_text().strip()
+                    break
+        
+        # Przygotuj dane
+        data = {
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "prior_day_open_interest": prior_day_open_interest if prior_day_open_interest else "N/A"
+        }
+        
+        print(f"📊 Prior Day Open Interest: {data['prior_day_open_interest']}")
+        print("-" * 50)
+        
+        # Zapisz do pliku
+        save_to_csv(data)
+        
     except Exception as e:
         print(f"❌ Błąd podczas scrapowania: {e}")
         print(f"   Szczegóły: {str(e)}")
@@ -72,7 +77,7 @@ async def scrape_cme_data():
 
 def job():
     """Funkcja uruchamiana przez scheduler"""
-    asyncio.run(scrape_cme_data())
+    scrape_cme_data()
 
 if __name__ == "__main__":
     print("🚀 SCRAPER CME GROUP URUCHOMIONY!")
