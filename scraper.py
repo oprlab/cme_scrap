@@ -1,6 +1,6 @@
 import schedule
 import time
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import csv
 import os
 import requests
@@ -73,6 +73,11 @@ def scrape_investing_data():
     4. Zmień MOCK_VOLUME na tę wartość
     5. Uruchom scraper ponownie
     """
+    # Sprawdzenie czy jesteśmy w sesji handlowej ropy
+    if not is_oil_trading_session():
+        print(f"⏸️  Poza sesją handlową ropy (UTC-5: pon-pią 9:00-14:30)")
+        return
+    
     try:
         print(f"🔄 Scrapowanie Investing.com ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})...")
         print(f"  📊 Wolumen: {MOCK_VOLUME} (dane mock)")
@@ -90,6 +95,32 @@ def scrape_investing_data():
         print(f"❌ Błąd: {e}")
         print("-" * 50)
 
+def is_oil_trading_session():
+    """
+    Sprawdza czy jesteśmy w sesji handlowej ropy.
+    Sesja UTC-5: poniedziałek-piątek 9:00-14:30
+    Konwersja do UTC: od poniedziałku 14:00 do soboty 19:30 (UTC)
+    """
+    # Pobieramy aktualny czas w UTC
+    now_utc = datetime.now(timezone.utc)
+    
+    # Dzień tygodnia (0=poniedziałek, 6=niedziela)
+    weekday_utc = now_utc.weekday()
+    hour_utc = now_utc.hour
+    minute_utc = now_utc.minute
+    
+    # Sesja w UTC-5: pon-pią 9:00-14:30 = pon 14:00 UTC do sob 19:30 UTC
+    is_session = False
+    
+    if weekday_utc == 0:  # Poniedziałek
+        is_session = (hour_utc > 14) or (hour_utc == 14 and minute_utc >= 0)
+    elif 1 <= weekday_utc <= 4:  # Wtorek-piątek
+        is_session = True
+    elif weekday_utc == 5:  # Sobota
+        is_session = (hour_utc < 19) or (hour_utc == 19 and minute_utc <= 30)
+    
+    return is_session
+
 def job():
     scrape_investing_data()
 
@@ -97,7 +128,8 @@ if __name__ == "__main__":
     print("🚀 SCRAPER INVESTING.COM URUCHOMIONY!")
     print(f"   Start: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("   Źródło: https://pl.investing.com/commodities/crude-oil")
-    print("   Zbieranie: o równych godzinach (:00 i :30)")
+    print("   Zbieranie: o równych połówkach godziny (:00 i :30)")
+    print("   Sesja: poniedziałek-piątek, UTC-5: 9:00-14:30")
     print("   Tryb: MOCK (dane ręcznie aktualizowane)")
     print("="*50)
     
