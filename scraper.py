@@ -13,7 +13,7 @@ MOCK_VOLUME = os.environ.get("MOCK_VOLUME", None)
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 
-# Walidacja konfiguracji
+# Walidacja Supabase
 if not SUPABASE_URL or not SUPABASE_KEY:
     print("⚠️  SUPABASE_URL lub SUPABASE_KEY nie jest ustawiony!")
 
@@ -166,9 +166,8 @@ if __name__ == "__main__":
     print("   Źródło: https://pl.investing.com/commodities/crude-oil")
     print("   Zbieranie: o równych połówkach godziny (:00 i :30)")
     print("   Sesja: poniedziałek-piątek, UTC-5: 9:00-14:30")
-    print("   Tryb: LIVE (ze strony) + fallback MOCK_VOLUME")
-    print(f"   MOCK_VOLUME (fallback): {MOCK_VOLUME if MOCK_VOLUME else '❌ Not set'}")
-    print(f"   SUPABASE: {'✅ Configured' if SUPABASE_URL and SUPABASE_KEY else '❌ Not configured'}")
+    print("   Tryb: LIVE (automatyczne scrapowanie + fallback MOCK)")
+    print(f"   SUPABASE: {'✅ Configured' if SUPABASE_URL and SUPABASE_KEY else '❌ Not set'}")
     print("="*50)
     
     # Nie uruchamiamy job() od razu - czekamy na schedule
