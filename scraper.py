@@ -163,19 +163,18 @@ if __name__ == "__main__":
     print("🚀 SCRAPER INVESTING.COM URUCHOMIONY!")
     print(f"   Start: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("   Źródło: https://pl.investing.com/commodities/crude-oil")
-    print("   Zbieranie: co 3 minuty (TEST MODE)")
+    print("   Zbieranie: o równych połówkach godziny (:00 i :30)")
     print("   Sesja: poniedziałek-piątek, UTC: 14:00-19:30")
     print("   Tryb: LIVE (zbieranie TYLKO ze strony - BeautifulSoup)")
     print(f"   SUPABASE: {'✅ Configured' if SUPABASE_URL and SUPABASE_KEY else '❌ Not configured'}")
     print("="*50)
     
-    # Uruchom zbieranie OD RAZU
-    print("📥 Zbieranie danych na starcie...")
-    job()
-    print("="*50)
+    # Zbieranie o równych połówkach godziny
+    schedule.every().hour.at(":00").do(job)  # o :00
+    schedule.every().hour.at(":30").do(job)  # o :30
     
-    # TEST: Co 3 minuty zamiast :00 i :30
-    schedule.every(3).minutes.do(job)
+    print("⏳ Czekam na następne zbieranie o :00 lub :30...")
+    print("="*50)
     
     while True:
         schedule.run_pending()
