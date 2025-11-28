@@ -8,9 +8,15 @@ import requests
 DATA_FILE = "investing_oil.csv"
 
 # Zmienne środowiskowe (Railway, lokalne .env)
-MOCK_VOLUME = os.environ.get("MOCK_VOLUME", "0.0")
+MOCK_VOLUME = os.environ.get("MOCK_VOLUME", None)
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
+
+# Walidacja konfiguracji
+if not MOCK_VOLUME:
+    print("⚠️  MOCK_VOLUME nie jest ustawiony! Scraper będzie pominąć zbiór danych.")
+if not SUPABASE_URL or not SUPABASE_KEY:
+    print("⚠️  SUPABASE_URL lub SUPABASE_KEY nie jest ustawiony!")
 
 def save_to_csv(data):
     file_exists = os.path.isfile(DATA_FILE)
@@ -58,12 +64,17 @@ def scrape_investing_data():
     1. Otwórz https://pl.investing.com/commodities/crude-oil w przeglądarce
     2. Znajdź pole "Wolumen"
     3. Skopiuj wartość (np. 77.626)
-    4. Zmień MOCK_VOLUME na tę wartość
-    5. Uruchom scraper ponownie
+    4. Ustaw zmienną MOCK_VOLUME w Railway Variables
+    5. Scraper automatycznie zbierze dane
     """
     # Sprawdzenie czy jesteśmy w sesji handlowej ropy
     if not is_oil_trading_session():
         print(f"⏸️  Poza sesją handlową ropy (UTC-5: pon-pią 9:00-14:30)")
+        return
+    
+    # Walidacja MOCK_VOLUME
+    if not MOCK_VOLUME:
+        print(f"⚠️  MOCK_VOLUME nie jest ustawiony - pominięcie zbioru")
         return
     
     try:
@@ -118,10 +129,10 @@ if __name__ == "__main__":
     print("   Źródło: https://pl.investing.com/commodities/crude-oil")
     print("   Zbieranie: o równych połówkach godziny (:00 i :30)")
     print("   Sesja: poniedziałek-piątek, UTC-5: 9:00-14:30")
-    print("   Tryb: MOCK (dane ręcznie aktualizowane)")
+    print("   Tryb: MOCK (dane z MOCK_VOLUME variable)")
     print("="*50)
     
-    job()
+    # Nie uruchamiamy job() od razu - czekamy na schedule
     schedule.every().hour.at(":00").do(job)  # Co godzinę o :00
     schedule.every().hour.at(":30").do(job)  # Co godzinę o :30
     
