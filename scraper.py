@@ -4,6 +4,7 @@ from datetime import datetime, timezone, timedelta
 import csv
 import os
 import requests
+from playwright.sync_api import sync_playwright
 
 DATA_FILE = "investing_oil.csv"
 
@@ -13,10 +14,46 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 
 # Walidacja konfiguracji
-if not MOCK_VOLUME:
-    print("⚠️  MOCK_VOLUME nie jest ustawiony! Scraper będzie pominąć zbiór danych.")
 if not SUPABASE_URL or not SUPABASE_KEY:
     print("⚠️  SUPABASE_URL lub SUPABASE_KEY nie jest ustawiony!")
+
+def scrape_investing_volume():
+    """Scrapeuje wolumen ropy z Investing.com"""
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto("https://pl.investing.com/commodities/crude-oil", timeout=30000)
+            
+            # Czekaj na załadowanie strony
+            page.wait_for_load_state("networkidle")
+            
+            # Szukaj wolumenu (może być w różnych miejscach)
+            # Szukamy liczby po słowie "Wolumen"
+            volume_text = page.text_content()
+            
+            # Spróbuj różne selektor CSS
+            try:
+                volume = page.locator("text=Wolumen").first.locator("..").text_content()
+                volume = volume.split("\n")[-1].strip()
+            except:
+                try:
+                    # Alternatywny selektor
+                    volume = page.locator("[data-test='text-volume']").text_content()
+                except:
+                    volume = None
+            
+            browser.close()
+            
+            if volume:
+                # Oczyść wartość (usuń znaki niewłaściwe)
+                volume = volume.replace(",", ".").strip()
+                return volume
+            return None
+            
+    except Exception as e:
+        print(f"⚠️  Błąd przy scrapeowaniu: {e}")
+        return None
 
 def save_to_csv(data):
     file_exists = os.path.isfile(DATA_FILE)
@@ -57,34 +94,34 @@ def send_to_webhook(data):
 
 def scrape_investing_data():
     """
-    UWAGA: Ta wersja używa mock danych, ponieważ Investing.com ładuje dane dynamicznie
-    i Railway nie obsługuje przeglądarek (Playwright, Selenium itp).
-    
-    Aby zaktualizować dane:
-    1. Otwórz https://pl.investing.com/commodities/crude-oil w przeglądarce
-    2. Znajdź pole "Wolumen"
-    3. Skopiuj wartość (np. 77.626)
-    4. Ustaw zmienną MOCK_VOLUME w Railway Variables
-    5. Scraper automatycznie zbierze dane
+    Scrapuje wolumen ropy z Investing.com przy użyciu Playwright.
+    Jeśli scrapeowanie nie uda się, używa MOCK_VOLUME jako fallback.
     """
     # Sprawdzenie czy jesteśmy w sesji handlowej ropy
     if not is_oil_trading_session():
         print(f"⏸️  Poza sesją handlową ropy (UTC-5: pon-pią 9:00-14:30)")
         return
     
-    # Walidacja MOCK_VOLUME
-    if not MOCK_VOLUME:
-        print(f"⚠️  MOCK_VOLUME nie jest ustawiony - pominięcie zbioru")
-        return
-    
     try:
         print(f"🔄 Scrapowanie Investing.com ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})...")
-        print(f"  📊 Wolumen: {MOCK_VOLUME} (dane mock)")
+        
+        # Próbuj scrapeować stronę
+        volume = scrape_investing_volume()
+        
+        if volume:
+            print(f"  📊 Wolumen (ze strony): {volume}")
+        elif MOCK_VOLUME:
+            print(f"  📊 Wolumen (mock fallback): {MOCK_VOLUME}")
+            volume = MOCK_VOLUME
+        else:
+            print(f"  ⚠️  Nie udało się pobrać wolumenu i brak MOCK_VOLUME")
+            return
+        
         print("-" * 50)
         
         data = {
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "volume": MOCK_VOLUME
+            "volume": volume
         }
         
         save_to_csv(data)
@@ -129,10 +166,9 @@ if __name__ == "__main__":
     print("   Źródło: https://pl.investing.com/commodities/crude-oil")
     print("   Zbieranie: o równych połówkach godziny (:00 i :30)")
     print("   Sesja: poniedziałek-piątek, UTC-5: 9:00-14:30")
-    print("   Tryb: MOCK (dane z MOCK_VOLUME variable)")
-    print(f"   MOCK_VOLUME: {MOCK_VOLUME}")
-    print(f"   SUPABASE_URL: {'✅ Set' if SUPABASE_URL else '❌ Not set'}")
-    print(f"   SUPABASE_KEY: {'✅ Set' if SUPABASE_KEY else '❌ Not set'}")
+    print("   Tryb: LIVE (ze strony) + fallback MOCK_VOLUME")
+    print(f"   MOCK_VOLUME (fallback): {MOCK_VOLUME if MOCK_VOLUME else '❌ Not set'}")
+    print(f"   SUPABASE: {'✅ Configured' if SUPABASE_URL and SUPABASE_KEY else '❌ Not configured'}")
     print("="*50)
     
     # Nie uruchamiamy job() od razu - czekamy na schedule
