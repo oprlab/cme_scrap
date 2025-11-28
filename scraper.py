@@ -11,8 +11,7 @@ import sys
 
 DATA_FILE = "investing_oil.csv"
 
-# Zmienne środowiskowe (Railway, lokalne .env)
-MOCK_VOLUME = os.environ.get("MOCK_VOLUME", None)
+# Zmienne środowiskowe (Railway)
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 
@@ -117,29 +116,25 @@ def send_to_webhook(data):
 
 def scrape_investing_data():
     """
-    Scrapuje wolumen ropy z Investing.com przy użyciu Playwright.
-    Jeśli scrapeowanie nie uda się, używa MOCK_VOLUME jako fallback.
+    Scrapuje wolumen ropy z Investing.com przy użyciu Pyppeteer.
+    Zbiera TYLKO dane ze strony - bez mock danych!
     """
     # Sprawdzenie czy jesteśmy w sesji handlowej ropy
     if not is_oil_trading_session():
-        print(f"⏸️  Poza sesją handlową ropy (UTC-5: pon-pią 9:00-14:30)")
+        print(f"⏸️  Poza sesją handlową ropy (UTC: pon-pią 14:00-19:30)")
         return
     
     try:
         print(f"🔄 Scrapowanie Investing.com ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})...")
         
-        # Próbuj scrapeować stronę
+        # Scrapeuj stronę
         volume = scrape_investing_volume()
         
-        if volume:
-            print(f"  📊 Wolumen (ze strony): {volume}")
-        elif MOCK_VOLUME:
-            print(f"  📊 Wolumen (mock fallback): {MOCK_VOLUME}")
-            volume = MOCK_VOLUME
-        else:
-            print(f"  ⚠️  Nie udało się pobrać wolumenu i brak MOCK_VOLUME")
+        if not volume:
+            print(f"  ⚠️  Nie udało się pobrać wolumenu ze strony")
             return
         
+        print(f"  📊 Wolumen (ze strony): {volume}")
         print("-" * 50)
         
         data = {
@@ -186,12 +181,12 @@ if __name__ == "__main__":
     print(f"   Start: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("   Źródło: https://pl.investing.com/commodities/crude-oil")
     print("   Zbieranie: co 3 minuty (TEST MODE)")
-    print("   Sesja: poniedziałek-piątek, UTC-5: 9:00-14:30")
-    print("   Tryb: LIVE (automatyczne scrapowanie + fallback MOCK)")
+    print("   Sesja: poniedziałek-piątek, UTC: 14:00-19:30")
+    print("   Tryb: LIVE (zbieranie TYLKO ze strony)")
     print(f"   SUPABASE: {'✅ Configured' if SUPABASE_URL and SUPABASE_KEY else '❌ Not configured'}")
     print("="*50)
     
-    # Zainstaluj Playwright przy starcie
+    # Zainstaluj Pyppeteer przy starcie
     ensure_playwright_browsers()
     print("="*50)
     
