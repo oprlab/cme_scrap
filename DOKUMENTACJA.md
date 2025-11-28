@@ -64,15 +64,14 @@ crawl4ai-scraper/
 W Railway → Variables dodaj:
 
 ```
-SUPABASE_URL = https://xqlvexlvvxpkolqrcoxd.supabase.co
-SUPABASE_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJz...
+SUPABASE_URL = https://your-project.supabase.co
+SUPABASE_KEY = your-anon-key-here
+MOCK_VOLUME = 77.626
 ```
+
+ℹ️ Nie commituj wrażliwych danych! Użyj `.env` lokalnie i zmiennych środowiskowych na Railway.
 
 ### Mock Data (Lokalna Konfiguracja)
-
-```python
-MOCK_VOLUME = "77.626"  # ← Zmień na bieżące dane
-```
 
 Pobierz aktualną wartość z: https://pl.investing.com/commodities/crude-oil
 
@@ -324,10 +323,10 @@ MOCK_VOLUME = "77.626"  # ← Zmień tę wartość
 ```javascript
 // Pobierz ostatnie 10 rekordów
 const response = await fetch(
-  'https://xqlvexlvvxpkolqrcoxd.supabase.co/rest/v1/investing_oil?order=created_at.desc&limit=10',
+  '{SUPABASE_URL}/rest/v1/investing_oil?order=created_at.desc&limit=10',
   {
     headers: {
-      'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+      'apikey': '{SUPABASE_KEY}',
       'Content-Type': 'application/json'
     }
   }
@@ -336,6 +335,8 @@ const response = await fetch(
 const data = await response.json();
 console.log(data);
 ```
+
+ℹ️ Zastąp `{SUPABASE_URL}` i `{SUPABASE_KEY}` swoimi zmiennymi środowiskowymi.
 
 ### API Endpoint
 
