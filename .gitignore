@@ -3,3 +3,7 @@
 __pycache__/
 .DS_Store
 *.csv
+debug*.py
+deep_search.py
+find_*.py
+playwright_install.sh
