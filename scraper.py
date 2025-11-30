@@ -1,13 +1,8 @@
-import schedule
-import time
-from datetime import datetime, timezone, timedelta
-import csv
+from datetime import datetime, timezone
 import os
 import requests
 from bs4 import BeautifulSoup
 import re
-
-DATA_FILE = "investing_oil.csv"
 
 # Zmienne środowiskowe (Railway)
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
@@ -16,18 +11,6 @@ SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 # Walidacja Supabase
 if not SUPABASE_URL or not SUPABASE_KEY:
     print("⚠️  SUPABASE_URL lub SUPABASE_KEY nie jest ustawiony!")
-
-def save_to_csv(data):
-    file_exists = os.path.isfile(DATA_FILE)
-    try:
-        with open(DATA_FILE, 'a', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=["timestamp", "volume"])
-            if not file_exists:
-                writer.writeheader()
-            writer.writerow(data)
-        print(f"✅ Dane zapisane do {DATA_FILE}")
-    except Exception as e:
-        print(f"❌ Błąd przy zapisywaniu: {e}")
 
 def send_to_webhook(data):
     """Wysyła dane do Supabase"""
@@ -125,7 +108,6 @@ def scrape_investing_data():
             "volume": volume
         }
         
-        save_to_csv(data)
         send_to_webhook(data)
         
     except Exception as e:
@@ -156,26 +138,13 @@ def is_oil_trading_session():
     
     return is_weekday and is_trading_time
 
-def job():
-    scrape_investing_data()
-
 if __name__ == "__main__":
-    print("🚀 SCRAPER INVESTING.COM URUCHOMIONY!")
-    print(f"   Start: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("   Źródło: https://pl.investing.com/commodities/crude-oil")
-    print("   Zbieranie: o równych połówkach godziny (:00 i :30)")
-    print("   Sesja: poniedziałek-piątek, UTC: 14:00-19:30")
-    print("   Tryb: LIVE (zbieranie TYLKO ze strony - BeautifulSoup)")
-    print(f"   SUPABASE: {'✅ Configured' if SUPABASE_URL and SUPABASE_KEY else '❌ Not configured'}")
-    print("="*50)
+    print("🚀 SCRAPER INVESTING.COM – TRYB JEDNORAZOWY")
+    print(f"   Czas: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     
-    # Zbieranie o równych połówkach godziny
-    schedule.every().hour.at(":00").do(job)  # o :00
-    schedule.every().hour.at(":30").do(job)  # o :30
+    if not is_oil_trading_session():
+        print("⏸️  Poza sesją handlową ropy (UTC: pon–pią 14:00–19:30). Nic nie robimy.")
+    else:
+        scrape_investing_data()
     
-    print("⏳ Czekam na następne zbieranie o :00 lub :30...")
-    print("="*50)
-    
-    while True:
-        schedule.run_pending()
-        time.sleep(60)
+    print("🔚 Skrypt zakończony.")
